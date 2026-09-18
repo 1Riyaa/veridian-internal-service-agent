@@ -1,0 +1,19 @@
+
+ASSIGNMENT 2 — ARCHITECTURE / PROCESS FLOW
+
+1. Employee enters a request.
+2. Agent normalizes the request and identifies the likely IT issue.
+3. Policy retrieval matches the request to the supplied KB / Asset Management Policy.
+4. Decision engine determines one of:
+   - Resolve / guide
+   - Ask a necessary follow-up question
+   - Route to IT / Security / Finance / human authorization
+5. Agent produces a structured ticket record containing category, priority, route, source and status.
+6. Agent displays the source used for the response.
+7. Every major agent action is written to an audit trail.
+
+GUARDRAIL:
+If the supplied data does not establish a policy or authorization rule, the agent does not invent one. It escalates to a human.
+
+DEMO DATA:
+10 policies + 15 employee requests + 10 existing tickets.

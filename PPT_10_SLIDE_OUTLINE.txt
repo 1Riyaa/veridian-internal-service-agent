@@ -1,0 +1,52 @@
+
+10-SLIDE PPT OUTLINE — ASSIGNMENT 2
+
+Slide 1 — Title
+Veridian Internal Service Agent
+A policy-grounded IT support agent
+
+Slide 2 — Problem
+Employees submit varied IT issues.
+The agent must understand, resolve, route and document requests without inventing policy.
+
+Slide 3 — Assignment Requirements
+Understand issue; find policy; ask follow-ups; resolve simple requests; escalate risky/unclear;
+create structured ticket; show source; maintain audit trail.
+
+Slide 4 — Data Sources
+Veridian Knowledge Base / Policies
+Employee Requests
+Existing Ticket Queue
+Asset Management Policy
+Constraint: supplied data only.
+
+Slide 5 — Architecture
+Employee → Chat UI → Issue Classification → Policy Retrieval → Decision Engine →
+Resolve / Follow-up / Escalate → Ticket + Source + Audit Trail
+
+Slide 6 — Decision Logic
+Security incident → immediate Security route
+Known simple request → direct guidance
+Missing information → follow-up
+Missing authorization policy → human escalation
+
+Slide 7 — Demo Case 1
+Phishing email
+Response: report immediately to security@veridian-corp.example; do not forward to employees.
+Source: KB-09.
+
+Slide 8 — Demo Case 2
+Guest Wi-Fi
+Response: employee generates 24-hour credentials from front-desk kiosk; no IT ticket.
+Source: KB-07.
+
+Slide 9 — Auditability / Safety
+Every decision records timestamp, action and details.
+Response includes source.
+Unknown authorization is not fabricated.
+
+Slide 10 — Outcome / Next Steps
+Working prototype
+Structured tickets
+Traceable policy grounding
+Future: real ticketing integration, authentication, richer retrieval and analytics.
