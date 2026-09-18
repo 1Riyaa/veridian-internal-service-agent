@@ -136,7 +136,7 @@ class InternalServiceAgent:
         try:
             response = self.gemini.models.generate_content(
                 model=self.gemini_model,
-                
+
                 contents=prompt
             )
 
@@ -277,15 +277,34 @@ class InternalServiceAgent:
             ) 
             return result
 
+        # Standard catalog software.
+        if (
+            ("software" in low or "tool" in low)
+            and ("standard catalog" in low)
+        ):
+            response = (
+                "Software available in the standard catalog can be self-installed "
+                "according to policy KB-04."
+            )
+            result = self._result(
+                "Resolve / Guide",
+                "Standard catalog software",
+                response,
+                "KB-04",
+                "Self-install from standard catalog",
+                confidence
+            )
+            self._log("decision", "Standard catalog software can be self-installed.")
+            return result
+
         # Non-catalog software.
         if (
             ("software" in low or "tool" in low)
             and (
                 "not in catalog" in low
+                or "not in the software catalog" in low
                 or "non-catalog" in low
                 or "non catalog" in low
-                or "approval" in low
-                or "install" in low
             )
         ):
             response = (
@@ -300,15 +319,6 @@ class InternalServiceAgent:
                 "IT Security review required",
                 confidence
             )
-            self._log("decision", "Security review required.")
-            return result
-
-
-        
-        # Non-catalog software.
-        if ("software" in low or "tool" in low or "extension" in low) and ("not in" in low or "non-catalog" in low or "approval" in low or "install" in low):
-            response = "Non-catalog software requires IT Security review, which takes 3–5 business days."
-            result = self._result("Escalate / Route to Security", "Non-catalog software installation", response, "KB-04", "IT Security review", confidence)
             self._log("decision", "Security review required.")
             return result
 
@@ -346,7 +356,10 @@ class InternalServiceAgent:
             import re
 
             # Try to extract the laptop age from the employee's message.
-            age_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:years?|yrs?)", low)
+            age_match = re.search(
+                r"(\d+(?:\.\d+)?)\s*[-]?\s*(?:years?|yrs?)(?:[-\s]?old)?",
+                low
+            )
             age = float(age_match.group(1)) if age_match else None
 
             hardware_failure = any(
