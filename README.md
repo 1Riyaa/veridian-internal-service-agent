@@ -66,3 +66,5 @@ Resolve OR Follow-up OR Escalate → Structured ticket → Source citation + aud
 - Ticket creation is represented as a structured record in the UI.
 - The supplied data pack is the only source of Veridian policy.
 - Historical tickets are used only as precedent/context, not as new policy.
+
+- app link : https://veridian-app-service-agent-3xcx2vvdlvvlreudzgslln.streamlit.app/
