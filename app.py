@@ -1,118 +1,326 @@
 import streamlit as st
 from agent import InternalServiceAgent
-from data import EMPLOYEE_REQUESTS, TICKETS, POLICIES
+from data import EMPLOYEE_REQUESTS, POLICIES, TICKETS
 
-st.set_page_config(page_title="Veridian Internal Service Agent", page_icon="🛠️", layout="wide")
+
+st.set_page_config(
+    page_title="Veridian Internal Service Agent",
+    page_icon="🛠️",
+    layout="wide",
+)
+
+
+# -----------------------------
+# Session State
+# -----------------------------
 
 if "agent" not in st.session_state:
     st.session_state.agent = InternalServiceAgent()
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "tickets" not in st.session_state:
-    st.session_state.tickets = list(TICKETS)
+    # Normalize historical tickets into the same schema
+    # used by newly generated tickets.
+    st.session_state.tickets = [
+        {
+            "Ticket ID": t.get("id", t.get("Ticket ID", "")),
+            "Employee": t.get("employee", t.get("Employee", "")),
+            "Issue Summary": t.get("issue", t.get("Issue Summary", "")),
+            "Category": t.get("category", "General IT"),
+            "Route / Action": t.get("route", "-"),
+            "Policy Source": t.get("source", "-"),
+            "Status": t.get("status", t.get("Status", "Open")),
+        }
+        for t in TICKETS
+    ]
 
-st.title("🛠️ Veridian Internal Service Agent")
-st.caption("Assignment 2 — Internal IT Support | Policy-grounded prototype")
+
+# -----------------------------
+# Query Processing
+# -----------------------------
+
+def process_query(prompt: str, employee: str, email: str):
+    """Submit a request to the agent and synchronize the ticket queue."""
+
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": prompt,
+        }
+    )
+
+    result = st.session_state.agent.analyze(
+        prompt,
+        employee_name=employee,
+        employee_email=email,
+    )
+
+    st.session_state.messages.append(
+        {
+            "role": "assistant",
+            "content": result["response"],
+            "result": result,
+        }
+    )
+
+    # Add the generated ticket to the live queue.
+    if result.get("ticket"):
+        ticket_data = result["ticket"]
+
+        next_id = (
+            f"TK-{1052 + len(st.session_state.tickets) - len(TICKETS)}"
+        )
+
+        new_ticket = {
+            "Ticket ID": next_id,
+            "Employee": employee,
+            "Issue Summary": (
+                prompt[:65] + "..."
+                if len(prompt) > 65
+                else prompt
+            ),
+            "Category": ticket_data.get(
+                "category",
+                "IT Support",
+            ),
+            "Route / Action": ticket_data.get(
+                "route",
+                "IT Helpdesk",
+            ),
+            "Policy Source": ticket_data.get(
+                "source",
+                "KB-General",
+            ),
+            "Status": ticket_data.get(
+                "status",
+                "Open",
+            ),
+        }
+
+        st.session_state.tickets.append(new_ticket)
+
+
+# -----------------------------
+# Sidebar
+# -----------------------------
 
 with st.sidebar:
-    st.header("Demo Controls")
-    st.write("Choose a supplied employee request to demonstrate the agent.")
-    choices = {f'{r["id"]} — {r["employee"]}': r for r in EMPLOYEE_REQUESTS}
-    selected = st.selectbox("Employee request", ["— Select —"] + list(choices.keys()))
-    if selected != "— Select —":
-        r = choices[selected]
-        if st.button("Load request"):
-            st.session_state.demo_text = r["request"]
-            st.session_state.demo_employee = r["employee"]
-            st.session_state.demo_email = r["email"]
-            st.session_state.messages = []
+
+    st.header("⚡ Evaluation Launcher")
+
+    st.caption(
+        "Select a supplied employee request to execute it "
+        "through the agent."
+    )
+
+    request_lookup = {
+        f"{r['id']} — {r['employee']}": r
+        for r in EMPLOYEE_REQUESTS
+    }
+
+    selected_key = st.selectbox(
+        "Select Benchmark Case",
+        ["— Select —"] + list(request_lookup.keys()),
+    )
+
+    if selected_key != "— Select —":
+
+        selected_request = request_lookup[selected_key]
+
+        st.markdown(
+            f"**Employee:** `{selected_request['employee']}`"
+        )
+
+        st.markdown(
+            f"**Email:** `{selected_request['email']}`"
+        )
+
+        st.text_area(
+            "Request Content",
+            value=selected_request["request"],
+            height=90,
+            disabled=True,
+        )
+
+        if st.button(
+            "🚀 Run Case Through Agent",
+            use_container_width=True,
+        ):
+            process_query(
+                selected_request["request"],
+                selected_request["employee"],
+                selected_request["email"],
+            )
+
             st.rerun()
 
     st.divider()
-    st.header("What this prototype demonstrates")
-    st.markdown("""
-    - Policy retrieval
-    - Direct resolution
-    - Follow-up questions
-    - Risk/ambiguity escalation
-    - Structured ticket generation
-    - Source citation
-    - Audit trail
-    """)
 
-    st.divider()
-    st.caption("Source data: Veridian Corp Assignment 2 Data Pack. No external company policies are used.")
-
-tab_chat, tab_requests, tab_tickets, tab_policies, tab_audit = st.tabs(
-    ["💬 Agent", "📥 Employee Requests", "🎫 Ticket Queue", "📚 Knowledge Base", "🧾 Audit Trail"]
-)
-
-with tab_chat:
-    if "demo_text" in st.session_state and not st.session_state.messages:
-        st.info(f'Demo request from {st.session_state.get("demo_employee","Employee")}: {st.session_state.demo_text}')
-
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
-            if m["role"] == "assistant" and "result" in m:
-                r = m["result"]
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Decision", r["decision"])
-                c2.metric("Confidence", r["confidence"])
-                c3.metric("Source", r["source"])
-                with st.expander("Structured ticket"):
-                    st.json(r["ticket"])
-
-    default_prompt = st.session_state.get("demo_text", "")
-    prompt = st.chat_input("Describe your IT issue…")
-    if prompt:
-        employee = st.session_state.get("demo_employee", "Demo Employee")
-        email = st.session_state.get("demo_email", "employee@veridian-corp.example")
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        result = st.session_state.agent.analyze(prompt, employee, email)
-        answer = result["response"]
-        answer += f"\n\n**Source used:** {result['source']}"
-        st.session_state.messages.append({"role": "assistant", "content": answer, "result": result})
-
-        if result.get("ticket"):
-            ticket = result["ticket"]
-
-            ticket["id"] = f"TK-{1052 + len(st.session_state.tickets) - len(TICKETS)}"
-            ticket["employee"] = employee
-            ticket["issue"] = prompt
-
-            st.session_state.tickets.append(ticket)
+    if st.button(
+        "🧹 Clear Chat & Audit History",
+        use_container_width=True,
+    ):
+        st.session_state.messages = []
+        st.session_state.agent.audit_log = []
 
         st.rerun()
 
+
+# -----------------------------
+# Main Interface
+# -----------------------------
+
+st.title("🛠️ Veridian Corp — Internal IT Service Desk Agent")
+
+st.caption(
+    "Policy-Grounded Autonomous Resolution & Triage Engine"
+)
+
+
+tab_chat, tab_requests, tab_tickets, tab_policies, tab_audit = st.tabs(
+    [
+        "💬 Support Chat",
+        "📥 Employee Requests (15)",
+        "🎫 Live Ticket Queue",
+        "📚 Knowledge Base",
+        "🧾 Audit Trail",
+    ]
+)
+
+
+# -----------------------------
+# Agent / Chat Tab
+# -----------------------------
+
+with tab_chat:
+
+    for message in st.session_state.messages:
+
+        with st.chat_message(message["role"]):
+
+            st.markdown(message["content"])
+
+            if (
+                message["role"] == "assistant"
+                and "result" in message
+            ):
+
+                result = message["result"]
+
+                c1, c2, c3 = st.columns(3)
+
+                c1.metric(
+                    "Decision",
+                    result.get("decision", "N/A"),
+                )
+
+                c2.metric(
+                    "Confidence",
+                    f"{float(result.get('confidence', 0.0)):.2f}",
+                )
+
+                c3.metric(
+                    "Source Cited",
+                    result.get("source", "N/A"),
+                )
+
+                with st.expander(
+                    "Inspection: Structured Ticket Payload"
+                ):
+                    st.json(result.get("ticket", {}))
+
+
+    custom_prompt = st.chat_input(
+        "Enter employee query or technical problem..."
+    )
+
+    if custom_prompt:
+
+        process_query(
+            custom_prompt,
+            employee="Ad-hoc User",
+            email="employee@veridian-corp.example",
+        )
+
+        st.rerun()
+
+
+# -----------------------------
+# Employee Requests Tab
+# -----------------------------
+
 with tab_requests:
-    st.subheader("Employee Requests — supplied data")
-    st.dataframe(EMPLOYEE_REQUESTS, use_container_width=True, hide_index=True)
+
+    st.subheader(
+        "Benchmark Requests — Supplied Data Pack"
+    )
+
+    st.dataframe(
+        EMPLOYEE_REQUESTS,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# -----------------------------
+# Ticket Queue Tab
+# -----------------------------
 
 with tab_tickets:
-    st.subheader("Ticket Queue")
+
+    st.subheader("Ticketing System Queue")
 
     st.dataframe(
         st.session_state.tickets,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
     )
 
     st.caption(
-        "The queue includes the supplied historical tickets and tickets "
-        "created during the current agent session."
+        "The queue contains supplied historical tickets "
+        "and tickets created during the current agent session."
     )
 
+
+# -----------------------------
+# Knowledge Base Tab
+# -----------------------------
+
 with tab_policies:
-    st.subheader("Knowledge Base / Policies — supplied data")
-    for p in POLICIES:
-        with st.expander(f'{p["id"]} — {p["title"]}'):
-            st.write(p["text"])
+
+    st.subheader(
+        "Veridian Corp Knowledge Base & Policy Governance"
+    )
+
+    for policy in POLICIES:
+
+        with st.expander(
+            f"{policy['id']} — {policy['title']}"
+        ):
+            st.write(policy["text"])
+
+
+# -----------------------------
+# Audit Trail Tab
+# -----------------------------
 
 with tab_audit:
-    st.subheader("Audit Trail")
+
+    st.subheader("Agent Execution Audit Trail")
+
     if st.session_state.agent.audit_log:
-        st.dataframe(st.session_state.agent.audit_log, use_container_width=True, hide_index=True)
+
+        st.dataframe(
+            st.session_state.agent.audit_log,
+            use_container_width=True,
+            hide_index=True,
+        )
+
     else:
-        st.info("No agent actions yet. Submit a request in the Agent tab.")
+
+        st.info(
+            "Audit log is currently empty. "
+            "Run an employee query to view trace events."
+        )

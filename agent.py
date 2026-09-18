@@ -23,6 +23,7 @@ class InternalServiceAgent:
 
         self.gemini_model = "gemini-3.6-flash"
         self.response_cache = {}
+        self.gemini_available = True
 
     def _log(self, action, details):
         self.audit_log.append({
@@ -60,6 +61,9 @@ class InternalServiceAgent:
         return policy, confidence
 
     def understand_request(self, message):
+        if not self.gemini_available:
+            return None
+        
         prompt = f"""
         You are an IT support request understanding assistant.
 
@@ -96,9 +100,20 @@ class InternalServiceAgent:
     
         except Exception as e:
             self._log("gemini_error", str(e))
+
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                self.gemini_available = False
+                self._log(
+                    "gemini_disabled",
+                    "Gemini temporarily disabled for this session because the API quota was exhausted."
+                )
+
             return None
 
     def generate_employee_response(self, employee_request, decision_result):
+        if not self.gemini_available:
+            return decision_result["response"]
+
         prompt = f"""
         You are an internal IT support response writer for Veridian Corp.
 
